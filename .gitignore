@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.streamlit/secrets.toml
+.DS_Store
+
+# Local runtime data and uploads. Keep sample CSV files if you want, but do not commit private practice data.
+data/uploads/
+*.zip

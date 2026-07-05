@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from .config import APP_TITLE, TARGET_MIN_SKILL, TARGET_OVERALL
-from .data_utils import ensure_data_files, restore_backup, storage_summary, zip_data_bytes
+from .data_utils import clear_google_cache, ensure_data_files, restore_backup, storage_summary, zip_data_bytes
 
 
 def setup_page(title: str):
@@ -27,14 +27,22 @@ def render_sidebar():
         st.sidebar.info("For deployment, configure Google Sheets/Drive in Streamlit secrets.")
     st.sidebar.divider()
 
-    backup_bytes = zip_data_bytes()
-    st.sidebar.download_button(
-        "Download data backup",
-        data=backup_bytes,
-        file_name=f"ielts_dashboard_backup_{date.today().isoformat()}.zip",
-        mime="application/zip",
-        use_container_width=True,
-    )
+    if st.sidebar.button("Refresh Google data", use_container_width=True):
+        clear_google_cache()
+        st.sidebar.success("Google data cache cleared. Reload or change pages to fetch fresh data.")
+
+    if st.sidebar.button("Prepare backup download", use_container_width=True):
+        st.session_state["_backup_bytes"] = zip_data_bytes()
+
+    if "_backup_bytes" in st.session_state:
+        st.sidebar.download_button(
+            "Download prepared backup",
+            data=st.session_state["_backup_bytes"],
+            file_name=f"ielts_dashboard_backup_{date.today().isoformat()}.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
+
     uploaded = st.sidebar.file_uploader("Restore backup (.zip)", type=["zip"])
     if uploaded is not None:
         if st.sidebar.button("Restore backup now", use_container_width=True):

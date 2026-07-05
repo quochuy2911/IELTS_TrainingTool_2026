@@ -193,6 +193,39 @@ def drive_configured() -> bool:
     return bool(settings.get("google_drive_folder_id") and service_account)
 
 
+
+
+def _cache_data(ttl_seconds: int):
+    """Use Streamlit cache when running inside Streamlit; no-op otherwise."""
+    try:
+        import streamlit as st
+        return st.cache_data(ttl=ttl_seconds, show_spinner=False)
+    except Exception:
+        def decorator(func):
+            return func
+        return decorator
+
+
+def _cache_resource():
+    """Use Streamlit resource cache when running inside Streamlit; no-op otherwise."""
+    try:
+        import streamlit as st
+        return st.cache_resource(show_spinner=False)
+    except Exception:
+        def decorator(func):
+            return func
+        return decorator
+
+
+def clear_google_cache() -> None:
+    """Clear cached Google Sheet reads after a write or when the user wants a manual refresh."""
+    for func_name in ["_get_spreadsheet_cached", "_get_worksheet_cached", "_read_gsheet_table_cached"]:
+        func = globals().get(func_name)
+        try:
+            func.clear()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
 def get_google_credentials(scopes: list[str]):
     service_account = get_secret_section("gcp_service_account")
     if not service_account:
@@ -216,16 +249,22 @@ def get_gspread_client():
     return gspread.authorize(get_google_credentials(scopes))
 
 
+@_cache_resource()
+def _get_spreadsheet_cached(sheet_id: str):
+    return get_gspread_client().open_by_key(sheet_id)
+
+
 def _get_spreadsheet():
     settings = get_storage_settings()
     sheet_id = settings.get("google_sheet_id")
     if not sheet_id:
         raise RuntimeError("Missing google_sheet_id in Streamlit secrets.")
-    return get_gspread_client().open_by_key(sheet_id)
+    return _get_spreadsheet_cached(sheet_id)
 
 
-def _get_or_create_worksheet(table_name: str):
-    ss = _get_spreadsheet()
+@_cache_resource()
+def _get_worksheet_cached(sheet_id: str, table_name: str):
+    ss = _get_spreadsheet_cached(sheet_id)
     try:
         import gspread
         try:
@@ -248,6 +287,14 @@ def _get_or_create_worksheet(table_name: str):
         return ws
 
 
+def _get_or_create_worksheet(table_name: str):
+    settings = get_storage_settings()
+    sheet_id = settings.get("google_sheet_id")
+    if not sheet_id:
+        raise RuntimeError("Missing google_sheet_id in Streamlit secrets.")
+    return _get_worksheet_cached(sheet_id, table_name)
+
+
 def _write_worksheet(ws, table_name: str, df: pd.DataFrame) -> None:
     df = _clean_df(table_name, df)
     payload = [TABLE_SCHEMAS[table_name]] + df.astype(str).values.tolist()
@@ -256,7 +303,7 @@ def _write_worksheet(ws, table_name: str, df: pd.DataFrame) -> None:
         ws.update(values=payload, range_name="A1")
 
 
-def _read_gsheet_table(table_name: str) -> pd.DataFrame:
+def _read_gsheet_table_uncached(table_name: str) -> pd.DataFrame:
     ws = _get_or_create_worksheet(table_name)
     values = ws.get_all_values()
     if not values:
@@ -276,9 +323,23 @@ def _read_gsheet_table(table_name: str) -> pd.DataFrame:
     return _clean_df(table_name, df)
 
 
+@_cache_data(ttl_seconds=120)
+def _read_gsheet_table_cached(table_name: str, sheet_id: str) -> pd.DataFrame:
+    # sheet_id is part of the cache key so switching sheets does not reuse old data.
+    _ = sheet_id
+    return _read_gsheet_table_uncached(table_name)
+
+
+def _read_gsheet_table(table_name: str) -> pd.DataFrame:
+    settings = get_storage_settings()
+    sheet_id = settings.get("google_sheet_id", "")
+    return _read_gsheet_table_cached(table_name, sheet_id)
+
+
 def _save_gsheet_table(table_name: str, df: pd.DataFrame) -> None:
     ws = _get_or_create_worksheet(table_name)
     _write_worksheet(ws, table_name, df)
+    clear_google_cache()
 
 
 def _warn_cloud_fallback(exc: Exception) -> None:
@@ -293,14 +354,9 @@ def _warn_cloud_fallback(exc: Exception) -> None:
 
 
 def ensure_data_files() -> None:
+    # Keep this lightweight. Streamlit reruns pages often, so do not touch every
+    # Google worksheet here; actual tables are created/read lazily when needed.
     ensure_local_data_files()
-    if cloud_configured():
-        for table_name in TABLE_SCHEMAS:
-            try:
-                _ = _get_or_create_worksheet(table_name)
-            except Exception as exc:
-                _warn_cloud_fallback(exc)
-                break
 
 
 def read_table(table_name: str) -> pd.DataFrame:
@@ -327,10 +383,24 @@ def save_table(table_name: str, df: pd.DataFrame) -> None:
 
 
 def append_row(table_name: str, row: dict[str, Any]) -> None:
-    df = read_table(table_name)
+    if table_name not in TABLE_SCHEMAS:
+        raise KeyError(f"Unknown table: {table_name}")
+
+    cleaned_row = [str(row.get(col, "")) for col in TABLE_SCHEMAS[table_name]]
+
+    if cloud_configured():
+        try:
+            ws = _get_or_create_worksheet(table_name)
+            ws.append_row(cleaned_row, value_input_option="USER_ENTERED")
+            clear_google_cache()
+            return
+        except Exception as exc:
+            _warn_cloud_fallback(exc)
+
+    df = _read_local_table(table_name)
     row_df = pd.DataFrame([{col: row.get(col, "") for col in TABLE_SCHEMAS[table_name]}])
     df = pd.concat([df, row_df], ignore_index=True)
-    save_table(table_name, df)
+    _save_local_table(table_name, df)
 
 
 def zip_data_bytes() -> bytes:

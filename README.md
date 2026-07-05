@@ -231,3 +231,16 @@ Even with Google Sheets/Drive, it is still a good idea to download backups regul
 ## 10. Notes
 
 This is a personal productivity tool, not an official IELTS scoring system. Use it to organize your preparation, store practice work, and track progress. For final score prediction, rely on repeated full mock tests and official band descriptor criteria.
+
+
+## V2.1 quota-safety update
+
+This version reduces Google Sheets API usage by:
+
+- caching Google Sheet reads for 120 seconds;
+- lazily checking/creating worksheets only when a table is needed;
+- appending new rows directly instead of reading and rewriting full sheets;
+- preparing data backups only when you click **Prepare backup download**;
+- adding a **Refresh Google data** sidebar button for manual cache refresh.
+
+If you see a temporary `429` quota message, stop rapid page switching, wait for the Google Sheets per-minute quota to refill, then use **Refresh Google data**.

@@ -1,0 +1,5 @@
+Setting,Value,Description
+target_overall,7.5,Target IELTS overall band score
+target_min_skill,6.5,Minimum acceptable band for each skill
+exam_date,2027-01-15,Expected IELTS exam date
+weekly_sessions,5,Target number of IELTS study sessions per week

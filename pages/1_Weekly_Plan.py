@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pandas as pd
 import streamlit as st
 
 from src.config import PHASES, STATUS_OPTIONS
@@ -9,8 +8,8 @@ from src.ui import dataframe_download, setup_page
 
 setup_page("Weekly Plan")
 
-st.title("📅 Weekly Study Plan")
-st.caption("26-week IELTS Academic roadmap from July 2026 to December 2026.")
+st.title("📅 Weekly Plan")
+st.caption("26-week IELTS Academic roadmap. Use this page only for planning; daily work happens in Study & Practice.")
 
 plan = read_table("weekly_plan")
 
@@ -54,7 +53,6 @@ edited = st.data_editor(
 save_col, download_col = st.columns([1, 1])
 with save_col:
     if st.button("Save changes", type="primary", use_container_width=True):
-        # Merge edited filtered rows back into the full plan by Week number.
         full = plan.copy()
         edited_indexed = edited.set_index("Week")
         full_indexed = full.set_index("Week")

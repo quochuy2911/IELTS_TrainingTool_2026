@@ -6,19 +6,24 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from src.config import DEFAULT_EXAM_DATE, PLAN_START, TARGET_MIN_SKILL, TARGET_OVERALL
-from src.data_utils import read_table, storage_summary
+from src.config import PLAN_START
+from src.data_utils import get_app_settings, read_table
 from src.scoring import safe_float
 from src.ui import band_to_float, setup_page, storage_status_box
 
 setup_page("Home")
 
-st.title("🎓 IELTS Academic Preparation Dashboard")
-st.caption("Planner + practice workspace + media archive + error log + score tracker")
+settings = get_app_settings()
+target_overall = settings["target_overall"]
+target_min_skill = settings["target_min_skill"]
+weekly_sessions = settings["weekly_sessions"]
+exam_date = settings["exam_date"]
 
-exam_date = st.sidebar.date_input("Target exam date", value=DEFAULT_EXAM_DATE)
 today = date.today()
 days_remaining = (exam_date - today).days
+
+st.title("🎓 IELTS Academic Preparation Dashboard")
+st.caption("Simple control center: plan your week, practice all skills, review progress, and keep your IELTS work in one place.")
 
 plan = read_table("weekly_plan")
 study_log = read_table("study_log")
@@ -68,7 +73,7 @@ if not mock_tests.empty:
     valid = {k: v for k, v in skill_scores.items() if v is not None}
     if valid:
         weakest_skill = min(valid, key=valid.get)
-        latest_min_skill = min(valid.values())
+        latest_min_skill = f"{min(valid.values()):.1f}"
 elif not practice.empty:
     tmp = practice.copy()
     tmp["Band_num"] = band_to_float(tmp["Estimated Band"])
@@ -79,19 +84,16 @@ elif not practice.empty:
 st.subheader("Current status")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Days remaining", days_remaining)
-col2.metric("This week", f"{completed_this_week} / 5 sessions", f"{hours_this_week:.1f} hours")
+col2.metric("This week", f"{completed_this_week} / {weekly_sessions} sessions", f"{hours_this_week:.1f} hours")
 col3.metric("Latest mock overall", latest_overall)
 col4.metric("Weakest skill", weakest_skill)
 
 st.info(f"Current phase: **{current_phase_from_plan(plan, today)}**")
 
 if weakest_skill in ["Writing", "Speaking", "Reading", "Listening"]:
-    st.write(f"Next suggested session: **{weakest_skill} repair/practice**, because it is currently your weakest recorded skill.")
+    st.write(f"Next suggested session: **{weakest_skill} practice or repair**, because it is currently your weakest recorded skill.")
 else:
-    st.write("Next suggested session: complete one practice record in the Practice Workspace to start tracking progress.")
-
-st.subheader("Storage readiness")
-storage_status_box()
+    st.write("Next suggested session: add one record in **Study & Practice** to start tracking your real baseline.")
 
 left, right = st.columns([1.1, 1])
 with left:
@@ -130,7 +132,7 @@ c4.metric("Logged mistakes", len(errors))
 
 st.subheader("Recent practice")
 if practice.empty:
-    st.info("No saved practice yet. Go to Practice Workspace to write and save your first answer.")
+    st.info("No saved practice yet. Go to Study & Practice to save your first answer or record.")
 else:
     cols = ["Date", "Skill", "Task Type", "Title", "Estimated Band", "Attachment Count", "Main Problem"]
     preview = practice.tail(5).iloc[::-1][cols]
@@ -138,6 +140,7 @@ else:
 
 st.subheader("Target check")
 st.write(
-    f"Your target is **Overall {TARGET_OVERALL}**, with **no skill below {TARGET_MIN_SKILL}**. "
-    "Try to reach this target in at least 2–3 full mock tests before the real exam."
+    f"Your current target is **Overall {target_overall:.1f}**, with **no skill below {target_min_skill:.1f}**. "
+    "You can change this in **Settings & Storage** without editing code."
 )
+storage_status_box()

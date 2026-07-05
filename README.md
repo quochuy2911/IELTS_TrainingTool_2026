@@ -1,246 +1,146 @@
-# IELTS Academic Dashboard Tool V2
+# IELTS Academic Dashboard Tool V2.2
 
-A personal Streamlit dashboard for preparing for the IELTS Academic exam from July 2026 to January 2027.
+A personal Streamlit dashboard for IELTS Academic preparation. It combines planning, all-skill practice, media uploads, progress tracking, mock-test monitoring, error logging, and Google Sheets/Drive storage.
 
-This version is designed as a complete IELTS workspace:
+## What changed in V2.2
 
-- 26-week IELTS Academic study plan
-- practice workspace for writing/speaking/reading/listening records
-- image upload for graphs, screenshots, and prompts
-- audio upload for speaking recordings
-- practice archive with attachment preview
-- speaking review page with audio playback and feedback editing
-- study log
-- progress charts
-- mock test tracker
-- error log
-- resources page
-- Google Sheets storage for records
-- Google Drive storage for uploaded files
-- local CSV/upload fallback for testing
+The app navigation was simplified from many separate pages into a clearer structure:
 
----
+```text
+Home
+Weekly Plan
+Study & Practice
+Progress & Mocks
+Settings & Storage
+Resources
+```
 
-## 1. Run locally first
+### Main improvements
+
+- Combined practice workspace, practice archive, study log, speaking review, and error log into one **Study & Practice** page.
+- Added skill-specific task-type lists:
+  - Listening tasks appear only when Listening is selected.
+  - Reading tasks appear only when Reading is selected.
+  - Writing tasks appear only when Writing is selected.
+  - Speaking tasks appear only when Speaking is selected.
+- Added the ability to add your own custom task types from inside the app.
+- Added a **Settings & Storage** page where you can edit:
+  - target overall band
+  - minimum skill band
+  - expected exam date
+  - target sessions per week
+- Added persistent `settings` and `task_types` tables.
+- Kept Google Sheets/Drive support with local CSV fallback.
+- Kept Google Sheets read caching to reduce quota errors.
+
+## Folder structure
+
+```text
+ielts_academic_dashboard_tool_v2_2/
+├── app.py
+├── pages/
+│   ├── 1_Weekly_Plan.py
+│   ├── 2_Study_Practice.py
+│   ├── 3_Progress_Mocks.py
+│   ├── 4_Settings_Storage.py
+│   └── 5_Resources.py
+├── src/
+│   ├── config.py
+│   ├── data_utils.py
+│   ├── drive_utils.py
+│   ├── scoring.py
+│   └── ui.py
+├── data/
+│   ├── weekly_plan.csv
+│   ├── study_log.csv
+│   ├── mock_tests.csv
+│   ├── error_log.csv
+│   ├── practice_archive.csv
+│   ├── file_metadata.csv
+│   ├── settings.csv
+│   ├── task_types.csv
+│   └── resources.csv
+├── requirements.txt
+└── .streamlit/secrets.example.toml
+```
+
+## Run locally
 
 ```bash
-cd ielts_academic_dashboard_tool_v2
+cd ielts_academic_dashboard_tool_v2_2
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-On macOS/Linux:
+## Storage behavior
 
-```bash
-source .venv/bin/activate
+The app can run in two modes:
+
+1. **Local fallback mode**
+   - Records are stored in `data/*.csv`.
+   - Uploaded files are stored in `data/uploads/`.
+   - Good for local testing.
+
+2. **Cloud mode**
+   - Records are stored in Google Sheets.
+   - Uploaded images/audio/files are stored in Google Drive.
+   - Recommended for long-term deployed use.
+
+## Google Sheets / Drive setup
+
+Create `.streamlit/secrets.toml` locally, based on `.streamlit/secrets.example.toml`.
+
+```toml
+[storage]
+google_sheet_id = "paste_your_google_sheet_id_here"
+google_drive_folder_id = "paste_your_google_drive_folder_id_here"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "your_project_id"
+private_key_id = "your_private_key_id"
+private_key = "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n"
+client_email = "your-service-account@your-project.iam.gserviceaccount.com"
+client_id = "your_client_id"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "your_cert_url"
+universe_domain = "googleapis.com"
 ```
 
-Without Google credentials, the app uses local storage:
+Do not commit `.streamlit/secrets.toml` or service-account JSON files.
 
-- `data/*.csv` for records
-- `data/uploads/` for uploaded files
+## Updating an existing V2.1 repo
 
-This is good for testing, but not ideal for long-term cloud deployment.
-
----
-
-## 2. Recommended deployment storage
-
-For serious 6-month use after deploying, use:
-
-| Data type | Recommended storage |
-|---|---|
-| Weekly plan status | Google Sheets |
-| Study log | Google Sheets |
-| Practice archive | Google Sheets |
-| Mock tests | Google Sheets |
-| Error log | Google Sheets |
-| File metadata | Google Sheets |
-| Images/audio/PDF files | Google Drive |
-
-The app automatically uses Google Sheets/Drive when credentials are configured. Otherwise, it falls back to local files.
-
----
-
-## 3. Create Google storage
-
-### A. Create one Google Sheet
-
-Create a blank Google Sheet, for example:
+If you are replacing an existing V2.1 project, delete these old page files first:
 
 ```text
-IELTS Academic Dashboard Data
+pages/2_Practice_Workspace.py
+pages/3_Practice_Archive.py
+pages/4_Speaking_Review.py
+pages/5_Study_Log.py
+pages/6_Progress_Charts.py
+pages/7_Mock_Tests.py
+pages/8_Error_Log.py
+pages/9_Storage_Setup.py
+pages/10_Resources.py
 ```
 
-Copy the Sheet ID from the URL:
+Then copy the new `pages/`, `src/`, `data/settings.csv`, `data/task_types.csv`, `app.py`, and `README.md` files.
 
-```text
-https://docs.google.com/spreadsheets/d/<THIS_IS_THE_SHEET_ID>/edit
-```
+## GitHub safety
 
-The app will automatically create these worksheets:
+Your `.gitignore` should include:
 
-```text
-weekly_plan
-study_log
-mock_tests
-error_log
-practice_archive
-file_metadata
-resources
-```
-
-### B. Create one Google Drive folder
-
-Create a Google Drive folder, for example:
-
-```text
-IELTS Dashboard Uploads
-```
-
-Copy the folder ID from the URL:
-
-```text
-https://drive.google.com/drive/folders/<THIS_IS_THE_FOLDER_ID>
-```
-
----
-
-## 4. Create a Google Cloud service account
-
-1. Open Google Cloud Console.
-2. Create or choose a project.
-3. Enable these APIs:
-   - Google Sheets API
-   - Google Drive API
-4. Create a service account.
-5. Create a JSON key for that service account.
-6. Copy the service account email address.
-7. Share your Google Sheet with the service account email as **Editor**.
-8. Share your Google Drive upload folder with the service account email as **Editor**.
-
----
-
-## 5. Configure Streamlit secrets
-
-For local testing, copy:
-
-```text
-.streamlit/secrets.example.toml
-```
-
-to:
-
-```text
+```gitignore
+.venv/
+__pycache__/
+*.pyc
 .streamlit/secrets.toml
+*.json
+data/uploads/
 ```
 
-Then fill in your Google Sheet ID, Drive folder ID, and service account JSON fields.
-
-For Streamlit Community Cloud, paste the same TOML content into:
-
-```text
-App settings > Secrets
-```
-
-Never commit your real `.streamlit/secrets.toml` to GitHub.
-
----
-
-## 6. Deploy to GitHub + Streamlit Community Cloud
-
-1. Create a GitHub repository.
-2. Push this project folder to the repository.
-3. Go to Streamlit Community Cloud.
-4. Create a new app from your GitHub repo.
-5. Set the main file path to:
-
-```text
-app.py
-```
-
-6. Add your secrets in the Streamlit app settings.
-7. Deploy.
-8. Open the **Storage Setup** page and test the connection.
-
----
-
-## 7. App pages
-
-```text
-Home
-Weekly Plan
-Practice Workspace
-Practice Archive
-Speaking Review
-Study Log
-Progress Charts
-Mock Tests
-Error Log
-Storage Setup
-Resources
-```
-
----
-
-## 8. Recommended workflow
-
-### For Writing Task 1
-
-1. Open Practice Workspace.
-2. Select Writing.
-3. Select Academic Task 1 type.
-4. Upload the chart/screenshot.
-5. Write your report.
-6. Save estimated band, feedback, and reflection.
-
-### For Writing Task 2
-
-1. Paste the prompt.
-2. Write the essay.
-3. Add feedback and rewrite notes.
-4. Save to archive.
-
-### For Speaking
-
-1. Record yourself using your phone/laptop.
-2. Upload the audio file.
-3. Paste the question/cue card.
-4. Add script/transcript or key notes.
-5. Review it later in Speaking Review.
-
-### For Reading/Listening
-
-1. Save source/test information.
-2. Add score/accuracy.
-3. Add mistake pattern and fix strategy.
-4. Link repeated issues to Error Log.
-
----
-
-## 9. Backup
-
-The sidebar includes a backup download button. It exports all current record tables into a ZIP file. If you are using local uploads, local uploaded files are also included.
-
-Even with Google Sheets/Drive, it is still a good idea to download backups regularly.
-
----
-
-## 10. Notes
-
-This is a personal productivity tool, not an official IELTS scoring system. Use it to organize your preparation, store practice work, and track progress. For final score prediction, rely on repeated full mock tests and official band descriptor criteria.
-
-
-## V2.1 quota-safety update
-
-This version reduces Google Sheets API usage by:
-
-- caching Google Sheet reads for 120 seconds;
-- lazily checking/creating worksheets only when a table is needed;
-- appending new rows directly instead of reading and rewriting full sheets;
-- preparing data backups only when you click **Prepare backup download**;
-- adding a **Refresh Google data** sidebar button for manual cache refresh.
-
-If you see a temporary `429` quota message, stop rapid page switching, wait for the Google Sheets per-minute quota to refill, then use **Refresh Google data**.

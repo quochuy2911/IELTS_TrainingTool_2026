@@ -5,8 +5,8 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from .config import APP_TITLE, TARGET_MIN_SKILL, TARGET_OVERALL
-from .data_utils import clear_google_cache, ensure_data_files, restore_backup, storage_summary, zip_data_bytes
+from .config import APP_TITLE
+from .data_utils import clear_google_cache, ensure_data_files, get_app_settings, restore_backup, storage_summary, zip_data_bytes
 
 
 def setup_page(title: str):
@@ -16,8 +16,14 @@ def setup_page(title: str):
 
 
 def render_sidebar():
+    settings = get_app_settings()
     st.sidebar.title("🎓 IELTS Academic")
-    st.sidebar.caption(f"Target: Overall {TARGET_OVERALL} | No skill below {TARGET_MIN_SKILL}")
+    st.sidebar.caption(
+        f"Target: Overall {settings['target_overall']:.1f} | "
+        f"No skill below {settings['target_min_skill']:.1f}"
+    )
+    st.sidebar.caption(f"Exam date: {settings['exam_date'].isoformat()}")
+
     summary = storage_summary()
     st.sidebar.divider()
     st.sidebar.write("**Storage**")
@@ -52,7 +58,7 @@ def render_sidebar():
             else:
                 st.sidebar.warning("No valid dashboard CSV files were found in this backup.")
     st.sidebar.divider()
-    st.sidebar.caption("Use the Storage Setup page before deploying for long-term use.")
+    st.sidebar.caption("Target and task types can be edited in Settings & Storage.")
 
 
 def dataframe_download(df: pd.DataFrame, file_name: str, label: str = "Download CSV"):

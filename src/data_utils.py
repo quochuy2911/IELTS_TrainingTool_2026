@@ -8,6 +8,8 @@ import zipfile
 
 import pandas as pd
 
+from .config import DEFAULT_EXAM_DATE, DEFAULT_TARGET_MIN_SKILL, DEFAULT_TARGET_OVERALL, DEFAULT_TASK_TYPES, DEFAULT_WEEKLY_SESSIONS, SKILLS
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -35,6 +37,8 @@ TABLE_SCHEMAS: dict[str, list[str]] = {
         "File ID", "Practice ID", "Date", "Skill", "File Name", "File Type", "MIME Type", "Size Bytes",
         "Storage Provider", "Local Path", "Drive File ID", "Drive URL", "Notes"
     ],
+    "settings": ["Setting", "Value", "Description"],
+    "task_types": ["Skill", "Task Type", "Active", "Custom", "Notes"],
     "resources": ["Category", "Name", "URL/Reference", "Use Case", "Notes"],
 }
 
@@ -96,6 +100,25 @@ def build_weekly_plan() -> pd.DataFrame:
     return pd.DataFrame(rows, columns=TABLE_SCHEMAS["weekly_plan"])
 
 
+
+def build_settings() -> pd.DataFrame:
+    rows = [
+        ["target_overall", f"{DEFAULT_TARGET_OVERALL:.1f}", "Target IELTS overall band score"],
+        ["target_min_skill", f"{DEFAULT_TARGET_MIN_SKILL:.1f}", "Minimum acceptable band for each skill"],
+        ["exam_date", DEFAULT_EXAM_DATE.isoformat(), "Expected IELTS exam date"],
+        ["weekly_sessions", str(DEFAULT_WEEKLY_SESSIONS), "Target number of IELTS study sessions per week"],
+    ]
+    return pd.DataFrame(rows, columns=TABLE_SCHEMAS["settings"])
+
+
+def build_task_types() -> pd.DataFrame:
+    rows = []
+    for skill in SKILLS:
+        for task_type in DEFAULT_TASK_TYPES.get(skill, []):
+            rows.append([skill, task_type, "Yes", "No", ""])
+    return pd.DataFrame(rows, columns=TABLE_SCHEMAS["task_types"])
+
+
 def build_resources() -> pd.DataFrame:
     rows = [
         ["Official", "IELTS Academic sample test questions", "https://ielts.org/take-a-test/preparation-resources/sample-test-questions/academic-test", "Official sample tasks and model answers", "Use first before third-party materials"],
@@ -112,6 +135,10 @@ def build_resources() -> pd.DataFrame:
 def default_table(table_name: str) -> pd.DataFrame:
     if table_name == "weekly_plan":
         return build_weekly_plan()
+    if table_name == "settings":
+        return build_settings()
+    if table_name == "task_types":
+        return build_task_types()
     if table_name == "resources":
         return build_resources()
     return pd.DataFrame(columns=TABLE_SCHEMAS[table_name])
@@ -437,6 +464,94 @@ def restore_backup(uploaded_file) -> list[str]:
                 with zf.open(item) as src, target.open("wb") as dst:
                     dst.write(src.read())
     return restored
+
+
+
+def get_setting_value(settings_df: pd.DataFrame, setting: str, default: str = "") -> str:
+    if settings_df.empty or "Setting" not in settings_df.columns:
+        return default
+    match = settings_df[settings_df["Setting"] == setting]
+    if match.empty:
+        return default
+    value = str(match.iloc[0].get("Value", "")).strip()
+    return value if value else default
+
+
+def get_app_settings() -> dict[str, Any]:
+    df = read_table("settings")
+
+    def as_float(name: str, default: float) -> float:
+        try:
+            return float(get_setting_value(df, name, str(default)))
+        except Exception:
+            return default
+
+    def as_int(name: str, default: int) -> int:
+        try:
+            return int(float(get_setting_value(df, name, str(default))))
+        except Exception:
+            return default
+
+    exam_date_text = get_setting_value(df, "exam_date", DEFAULT_EXAM_DATE.isoformat())
+    try:
+        exam_date = date.fromisoformat(exam_date_text)
+    except Exception:
+        exam_date = DEFAULT_EXAM_DATE
+
+    return {
+        "target_overall": as_float("target_overall", DEFAULT_TARGET_OVERALL),
+        "target_min_skill": as_float("target_min_skill", DEFAULT_TARGET_MIN_SKILL),
+        "weekly_sessions": as_int("weekly_sessions", DEFAULT_WEEKLY_SESSIONS),
+        "exam_date": exam_date,
+    }
+
+
+def save_app_settings(target_overall: float, target_min_skill: float, weekly_sessions: int, exam_date: date) -> None:
+    rows = [
+        {"Setting": "target_overall", "Value": f"{target_overall:.1f}", "Description": "Target IELTS overall band score"},
+        {"Setting": "target_min_skill", "Value": f"{target_min_skill:.1f}", "Description": "Minimum acceptable band for each skill"},
+        {"Setting": "exam_date", "Value": exam_date.isoformat(), "Description": "Expected IELTS exam date"},
+        {"Setting": "weekly_sessions", "Value": str(int(weekly_sessions)), "Description": "Target number of IELTS study sessions per week"},
+    ]
+    save_table("settings", pd.DataFrame(rows, columns=TABLE_SCHEMAS["settings"]))
+
+
+def get_task_type_options(skill: str) -> list[str]:
+    df = read_table("task_types")
+    if df.empty:
+        return DEFAULT_TASK_TYPES.get(skill, [])
+    view = df[(df["Skill"] == skill) & (df["Active"].str.lower().isin(["yes", "true", "1", "active"]))]
+    options = [str(x).strip() for x in view["Task Type"].tolist() if str(x).strip()]
+    # Preserve order while removing duplicates.
+    seen = set()
+    unique = []
+    for option in options:
+        key = option.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(option)
+    return unique or DEFAULT_TASK_TYPES.get(skill, [])
+
+
+def add_task_type(skill: str, task_type: str, notes: str = "") -> bool:
+    task_type = str(task_type).strip()
+    if not task_type:
+        return False
+    df = read_table("task_types")
+    if df.empty:
+        df = build_task_types()
+    exists = ((df["Skill"] == skill) & (df["Task Type"].str.lower() == task_type.lower())).any()
+    if exists:
+        return False
+    row = pd.DataFrame([{
+        "Skill": skill,
+        "Task Type": task_type,
+        "Active": "Yes",
+        "Custom": "Yes",
+        "Notes": notes,
+    }], columns=TABLE_SCHEMAS["task_types"])
+    save_table("task_types", pd.concat([df, row], ignore_index=True))
+    return True
 
 
 def make_practice_id() -> str:
